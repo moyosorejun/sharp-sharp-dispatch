@@ -44,11 +44,11 @@ export default function Landing() {
               <SlicedHeadline
                 text="Customer care wey sabi when you no understand."
                 highlight="sabi"
-                className="max-w-[13ch] text-[clamp(2.1rem,7vw,5rem)]"
+                className="max-w-[16ch] text-[clamp(2rem,5vw,4rem)]"
               />
             </div>
 
-            <div className="mt-10 flex flex-col gap-10 md:flex-row md:items-end md:justify-between">
+            <div className="mt-8 flex flex-col gap-10 md:flex-row md:items-end md:justify-between">
               <div className="max-w-xl">
                 <p className="text-lg text-white/85 sm:text-xl">
                   Ada is a voice agent that speaks English and Pidgin, and changes how she explains things when you're lost.

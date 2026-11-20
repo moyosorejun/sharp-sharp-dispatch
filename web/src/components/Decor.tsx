@@ -181,7 +181,7 @@ export function SlicedHeadline({
   const topMask = `repeating-linear-gradient(to bottom, #000 0 ${cut}, transparent ${cut} 1.05em)`;
   const bottomMask = `repeating-linear-gradient(to bottom, transparent 0 ${cut}, #000 ${cut} 1.05em)`;
   return (
-    <h1 className={`relative font-black ${className}`} style={{ lineHeight: 1.05 }}>
+    <h1 className={`relative font-extrabold ${className}`} style={{ lineHeight: 1.05, letterSpacing: '-0.03em' }}>
       {/* real text for screen readers and layout */}
       <span style={{ color, display: 'block', maskImage: topMask, WebkitMaskImage: topMask }}>{content}</span>
       <span
