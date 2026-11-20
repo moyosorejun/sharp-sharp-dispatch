@@ -68,7 +68,12 @@ The browser only ever has the Vapi **public** key and talks to a read-only API. 
 
 ### 7. Hosting
 
-During development the server runs on a laptop behind an ngrok domain so Vapi can reach it. That is fine for a demo but not for real callers: if the laptop sleeps, Ada loses her tools. Deploying the server to a host is a prerequisite for a phone number.
+Both halves run on Vercel: the web app as a static site (`web/vercel.json` sends every route to the React app) and the Express server as a single Vercel Function (`server/index.js` exports the app; it only calls `listen()` locally). Vercel was chosen over Render's free tier because Render sleeps after 15 idle minutes and takes 30 to 60 seconds to wake, which would break the first call's tool lookups.
+
+- **Cost of serverless:** function instances share no memory, so the pause timing that used to live in a `Map` now lives on the `calls` row (`assistant_stopped_at`, `pending_pause_ms`). That adds two small database writes per turn. If those columns are missing, the server falls back to memory, which is only reliable on a single long-running server.
+- **Grants:** newer Supabase projects do not give API roles access to tables created in the SQL editor, so `schema.sql` ends with explicit grants to `service_role`. The browser never talks to Supabase, so no other role gets access.
+- **Deploys are manual** (`vercel deploy --prod` from `server/` and `web/`), not triggered by pushes to GitHub.
+- Local development still works with ngrok: point `PUBLIC_SERVER_URL` back at the ngrok domain and run `npm run create-assistant`.
 
 ## Known limitations at a glance
 
@@ -76,4 +81,4 @@ During development the server runs on a laptop behind an ngrok domain so Vapi ca
 - Confusion scoring is an LLM heuristic.
 - Order lookup without an ID depends on the name being heard correctly.
 - Tested with a small group of callers only.
-- The server runs locally behind ngrok, not on a host.
+- Hosted on Vercel free tier with manual deploys; pause timing costs extra database writes because functions are stateless.

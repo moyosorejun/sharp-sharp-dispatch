@@ -24,25 +24,78 @@ function checkSecret(req, res, next) {
 }
 
 // ---------------------------------------------------------------
-// Pause tracking (in memory, per call).
+// Pause tracking, per call.
 // When the assistant stops talking we note the time. When the caller
 // starts talking, the gap is their pause. The next log_turn saves it.
+//
+// Stored on the `calls` row (assistant_stopped_at, pending_pause_ms),
+// because on Vercel each request can land on a different function
+// instance that shares no memory. If those columns don't exist yet
+// (older schema), it falls back to memory, which works on one server.
 // ---------------------------------------------------------------
-const pauses = new Map(); // callId -> { assistantStoppedAt, lastPauseMs }
+const pauses = new Map(); // memory fallback: callId -> { assistantStoppedAt, lastPauseMs }
+let pausesInDb = true;
 
-function trackSpeech(callId, role, status) {
+function pauseDbFailed(e) {
+  if (/assistant_stopped_at|pending_pause_ms|column/i.test(e.message)) {
+    pausesInDb = false;
+    console.warn('Pause columns missing on `calls`, using memory. Run the migration in supabase/schema.sql.');
+  } else {
+    console.error('pause tracking failed:', e.message);
+  }
+}
+
+async function trackSpeech(callId, role, status) {
   if (!callId) return;
-  const entry = pauses.get(callId) || { assistantStoppedAt: null, lastPauseMs: null };
   const now = Date.now();
-  if (role === 'assistant' && status === 'stopped') entry.assistantStoppedAt = now;
-  if (role === 'user' && status === 'started' && entry.assistantStoppedAt) {
+  const stopped = role === 'assistant' && status === 'stopped';
+  const started = role === 'user' && status === 'started';
+  if (!stopped && !started) return;
+
+  if (pausesInDb) {
+    try {
+      if (stopped) {
+        await ensureCall(callId);
+        const { error } = await supabase.from('calls').update({ assistant_stopped_at: new Date(now).toISOString() }).eq('id', callId);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.from('calls').select('assistant_stopped_at').eq('id', callId).maybeSingle();
+        if (error) throw error;
+        if (data?.assistant_stopped_at) {
+          const { error: e2 } = await supabase
+            .from('calls')
+            .update({ assistant_stopped_at: null, pending_pause_ms: now - Date.parse(data.assistant_stopped_at) })
+            .eq('id', callId);
+          if (e2) throw e2;
+        }
+      }
+      return;
+    } catch (e) {
+      pauseDbFailed(e);
+    }
+  }
+
+  const entry = pauses.get(callId) || { assistantStoppedAt: null, lastPauseMs: null };
+  if (stopped) entry.assistantStoppedAt = now;
+  if (started && entry.assistantStoppedAt) {
     entry.lastPauseMs = now - entry.assistantStoppedAt;
     entry.assistantStoppedAt = null;
   }
   pauses.set(callId, entry);
 }
 
-function takePause(callId) {
+async function takePause(callId) {
+  if (pausesInDb) {
+    try {
+      const { data, error } = await supabase.from('calls').select('pending_pause_ms').eq('id', callId).maybeSingle();
+      if (error) throw error;
+      const ms = data?.pending_pause_ms ?? null;
+      if (ms !== null) await supabase.from('calls').update({ pending_pause_ms: null }).eq('id', callId);
+      return ms;
+    } catch (e) {
+      pauseDbFailed(e);
+    }
+  }
   const entry = pauses.get(callId);
   if (!entry) return null;
   const ms = entry.lastPauseMs;
@@ -155,7 +208,7 @@ const tools = {
       confusion_score: Number(args.confusion_score ?? 0),
       ladder_level: Number(args.ladder_level ?? 0),
       signals: Array.isArray(args.signals) ? args.signals : [],
-      pause_ms: takePause(callId),
+      pause_ms: await takePause(callId),
     });
     if (error) throw new Error(error.message);
     return 'logged';
@@ -264,7 +317,7 @@ app.post('/vapi', checkSecret, async (req, res) => {
       }
 
       case 'speech-update':
-        trackSpeech(callId, message.role, message.status);
+        await trackSpeech(callId, message.role, message.status);
         return res.status(200).json({});
 
       case 'end-of-call-report':
@@ -447,5 +500,10 @@ api.get('/escalations', async (_req, res) => {
 
 app.use('/api', api);
 
-const port = process.env.PORT || 3001;
-app.listen(port, () => console.log(`Agent server listening on http://localhost:${port}`));
+// On Vercel the app runs as a function, so it is exported instead of listening.
+export default app;
+
+if (!process.env.VERCEL) {
+  const port = process.env.PORT || 3001;
+  app.listen(port, () => console.log(`Agent server listening on http://localhost:${port}`));
+}

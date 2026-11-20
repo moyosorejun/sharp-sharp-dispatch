@@ -33,6 +33,7 @@ create table if not exists orders (
 
 -- ---------------------------------------------------------------
 -- 2. Calls (one row per voice call)
+-- (grants for the server's role are at the end of this file)
 -- ---------------------------------------------------------------
 create table if not exists calls (
   id             text primary key,               -- Vapi call id
@@ -44,6 +45,11 @@ create table if not exists calls (
   escalated      boolean not null default false,
   transcript     text
 );
+
+-- Pause tracking state, kept on the call row so it works when the server
+-- runs as stateless functions (Vercel). Safe to re-run on an existing database.
+alter table calls add column if not exists assistant_stopped_at timestamptz;
+alter table calls add column if not exists pending_pause_ms     integer;
 
 -- ---------------------------------------------------------------
 -- 3. Turns (one row per caller message, logged by the agent)
@@ -100,3 +106,13 @@ insert into orders (id, customer_name, item, pickup_area, delivery_area, status,
 ('SSD-1019', 'Bisi Adebayo',      'Shoes (2 pairs)',          'Surulere',       'Ibadan (Ring Road)', 'picked_up',           now() - interval '2 hours', current_date + 2, 6000, 'pay_on_delivery', 0, 'Interstate. Heading to Lagos hub first.'),
 ('SSD-1020', 'Tobi Martins',      'Mini fridge',              'Ikeja',          'Lekki Phase 1',    'on_hold_address_issue', now() - interval '1 day',   current_date + 1, 6500, 'prepaid',         0, 'Estate gate needs a visitor code from the customer.')
 on conflict (id) do nothing;
+
+-- ---------------------------------------------------------------
+-- Grants: the server uses the secret (service_role) key. Newer Supabase
+-- projects do not grant API roles access to tables made in the SQL
+-- editor, so grant it here. Only the server gets access: the browser
+-- never talks to Supabase directly.
+-- ---------------------------------------------------------------
+grant usage on schema public to service_role;
+grant select, insert, update, delete on all tables in schema public to service_role;
+grant usage, select on all sequences in schema public to service_role;

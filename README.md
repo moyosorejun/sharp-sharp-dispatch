@@ -4,6 +4,8 @@ Ada is a voice support agent for a fictional Nigerian delivery company. She spea
 
 > Sharp Sharp Dispatch is a made-up company for this demo. All orders and names are fake.
 
+**Try it:** [sharp-sharp-dispatch.vercel.app](https://sharp-sharp-dispatch.vercel.app). Open the call page and talk to Ada in English or Pidgin, or add `?demo` to `/call` for a scripted call with no mic.
+
 ## Why
 
 Most support bots notice anger, not confusion. And most of them don't understand how Nigerians actually sound when they're lost: "wetin you talk?", "I no get am", "abeg explain am again". Ada uses ideas from cognitive load theory: when someone is confused, reduce the load (smaller steps), then reframe (a familiar analogy), and only then hand over to a human.
@@ -86,7 +88,7 @@ Full reasoning in [docs/DECISIONS.md](docs/DECISIONS.md).
 - Confusion scoring is a heuristic from the LLM, not a validated model.
 - Finding an order without its ID needs the caller's name and area to be heard correctly. A real deployment would match on the caller's phone number.
 - Pause timing is measured on the server from speech events and is approximate.
-- The server runs locally behind ngrok during development.
+- Deploys to Vercel are manual (`npx vercel deploy --prod` in `server/` and `web/`), not automatic on push.
 - Tested with a small group of callers.
 
 ## Roadmap
