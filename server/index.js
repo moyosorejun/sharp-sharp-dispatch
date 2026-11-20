@@ -125,6 +125,18 @@ function normaliseOrderId(raw = '') {
   return digits ? `SSD-${digits}` : String(raw).trim().toUpperCase();
 }
 
+// Levenshtein distance for short digit strings
+function editDistance(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+  }
+  return d[a.length][b.length];
+}
+
 const STATUS_PLAIN = {
   order_received: 'We have the order but the rider has not picked it up from the seller yet.',
   picked_up: 'The rider has collected the package from the seller and is taking it to our hub.',
@@ -146,7 +158,22 @@ const tools = {
     const id = normaliseOrderId(args.order_id);
     const { data, error } = await supabase.from('orders').select('*').eq('id', id).maybeSingle();
     if (error) throw new Error(error.message);
-    if (!data) return JSON.stringify({ found: false, order_id: id });
+    if (!data) {
+      // Speech-to-text often mangles spoken digits ("one zero zero four"
+      // heard as "10 204"). Offer real IDs one edit away, so Ada can
+      // confirm a likely ID instead of asking for the whole thing again.
+      const heard = id.replace(/\D/g, '');
+      const { data: all } = await supabase.from('orders').select('id');
+      const did_you_mean = (all || []).map((o) => o.id).filter((oid) => heard && editDistance(heard, oid.replace(/\D/g, '')) <= 1);
+      return JSON.stringify({
+        found: false,
+        order_id: id,
+        did_you_mean,
+        next_step: did_you_mean.length
+          ? 'Ask the caller to confirm which of these they meant (read each as S S D and single digits), then call check_order with it.'
+          : 'Ask the caller to say just the four numbers again, slowly.',
+      });
+    }
     return JSON.stringify({
       found: true,
       order_id: data.id,

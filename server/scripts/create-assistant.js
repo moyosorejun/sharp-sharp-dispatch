@@ -71,7 +71,8 @@ const toolDefinitions = [
     async: true, // runs in the background so the caller never waits for logging
     function: {
       name: 'log_turn',
-      description: 'Record how confused the caller seems after every caller message. Call this every turn, before replying.',
+      description:
+        'Record how confused the caller seems. Call exactly once per caller message, in the same response as your spoken reply (never alone before replying, never twice).',
       parameters: {
         type: 'object',
         properties: {
@@ -219,8 +220,44 @@ async function main() {
     voice: {
       provider: process.env.VOICE_PROVIDER || '11labs',
       voiceId: process.env.VOICE_ID,
+      ...((process.env.VOICE_PROVIDER || '11labs') === '11labs' && {
+        model: 'eleven_turbo_v2_5', // fast, but smoother than the flash models
+        stability: 0.5,
+        similarityBoost: 0.75,
+        optimizeStreamingLatency: 2, // higher values trade smoothness for speed
+      }),
+      // Send the voice whole sentences, not clause-sized scraps: each chunk
+      // is spoken separately, so splitting at commas made Ada sound choppy.
+      chunkPlan: {
+        enabled: true,
+        minCharacters: 50,
+        punctuationBoundaries: ['.', '!', '?', ';'],
+        formatPlan: {
+          enabled: true,
+          // "SSD-1004" was read as "SSD minus one thousand and four"
+          replacements: [{ type: 'regex', regex: '[Ss]\\s?[Ss]\\s?[Dd][\\s-]*(\\d)(\\d)(\\d)(\\d)', value: 'S S D, $1 $2 $3 $4' }],
+        },
+      },
     },
     transcriber,
+    // Turn-taking. Vapi's default waits 1.5s after any transcript with no
+    // punctuation; spoken order numbers get a little longer so digits said
+    // with gaps aren't cut in half.
+    startSpeakingPlan: {
+      waitSeconds: 0.3,
+      transcriptionEndpointingPlan: { onPunctuationSeconds: 0.1, onNoPunctuationSeconds: 0.8, onNumberSeconds: 0.8 },
+    },
+    // A caller's "hmm" or "ehen" should not cut Ada off mid-sentence
+    // (5 interruptions in one test call). Two real words still do.
+    stopSpeakingPlan: {
+      numWords: 2,
+      voiceSeconds: 0.3,
+      backoffSeconds: 1,
+      acknowledgementPhrases: [
+        'okay', 'ok', 'alright', 'yes', 'yeah', 'right', 'i see', 'i understand', 'got it', 'sure', 'uh-huh', 'mm-hmm',
+        'hmm', 'ehen', 'ehn', 'yes o', 'okay o', 'oya', 'na so', 'i dey follow', 'i hear', 'i don hear', 'correct',
+      ],
+    },
     server,
     serverMessages: ['end-of-call-report', 'speech-update'],
     // What reaches the browser. The live call view needs model-output (Ada's

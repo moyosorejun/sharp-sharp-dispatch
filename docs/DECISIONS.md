@@ -37,6 +37,21 @@ The transcriber is one setting, `TRANSCRIBER` in `server/.env` (`openai`, `azure
 
 **Not tried yet:** Azure Speech with `en-NG` (Nigerian English), available as `TRANSCRIBER=azure`. It will not write Pidgin spelling, but it may hear Nigerian accents better and give the LLM cleaner text to correct. Longer term, a Nigerian speech provider such as Spitch is on the roadmap.
 
+### 1b. Latency, interruptions and voice rhythm
+
+Vapi's call logs (`GET /call`, `artifact.performanceMetrics`) showed an average of about 2.5 to 2.8 seconds from the caller finishing to Ada speaking, with some turns at 4 to 5.7 seconds. The causes and fixes:
+
+| Cause found in the logs | Fix |
+|---|---|
+| Ada called `log_turn` on its own before replying, so every turn needed an extra model round trip, sometimes two (it was called twice in one turn) | The prompt and tool description now say: call it once, in the same response as the spoken reply |
+| Vapi waits 1.5s after any transcript without punctuation before replying | `onNoPunctuationSeconds` lowered to 0.8s; numbers get 0.8s so digits said with gaps are not cut in half |
+| Five interruptions in one call: any "hmm" from the caller cut Ada off mid-sentence, leaving fragments like "E be like..." | Interrupting now takes two real words, and Pidgin acknowledgements ("ehen", "yes o", "na so") are ignored |
+| Choppy voice: text was sent to the voice in clause-sized chunks split at commas, each spoken separately | Chunks are now at least 50 characters and split only at sentence ends; ElevenLabs `eleven_turbo_v2_5` with less aggressive streaming optimisation |
+| "SSD-1004" was spoken as "SSD minus..." | A voice formatting rule rewrites order IDs as "S S D, 1 0 0 4" |
+| Misheard IDs ("10 204") failed, so Ada asked for a full repeat | `check_order` returns `did_you_mean` (real IDs one edit away) for Ada to confirm |
+
+- **Cost:** bigger voice chunks can add a fraction of a second before Ada starts talking, in exchange for smoother speech. Ignoring short acknowledgements means a caller who says only "no" will not stop her mid-sentence.
+
 ### 2. Ada's bubbles show what she generated, not what was heard
 
 Ada's bubbles are built from Vapi's `model-output` tokens (grouped by `turnId`), not from a transcript of her own voice, which had its own transcription errors. Her greeting does not go through the model, so `conversation-update` fills in any assistant message `model-output` never sent.
