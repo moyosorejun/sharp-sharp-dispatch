@@ -1,0 +1,20 @@
+{
+  "name": "sharp-sharp-dispatch-server",
+  "version": "1.0.0",
+  "description": "Backend for the Sharp Sharp Dispatch voice support agent (Vapi tools + call logging)",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "create-assistant": "node scripts/create-assistant.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}

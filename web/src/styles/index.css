@@ -1,0 +1,211 @@
+@import 'tailwindcss';
+
+/* ------------------------------------------------------------------
+   Design tokens (brief section 5). Source of truth. No other colours.
+   ------------------------------------------------------------------ */
+:root {
+  --ss-green: #2BCB35; --ss-forest: #0F3B2E; --ss-teal: #1F5E4F;
+  --ss-mint: #66EFA8; --ss-yellow: #FFC21A; --ss-magenta: #E01E8C;
+  --ss-ink: #0B0B0B; --ss-cream: #FFF8EE; --ss-white: #FFFFFF;
+
+  --conf-0: var(--ss-green); --conf-1: var(--ss-mint);
+  --conf-2: var(--ss-yellow); --conf-3: var(--ss-magenta);
+
+  --radius-sm: 10px; --radius-md: 18px; --radius-lg: 28px; --radius-pill: 999px;
+  --border: 2px solid var(--ss-ink);
+  --shadow-hard: 5px 5px 0 var(--ss-ink);
+  --shadow-hard-sm: 3px 3px 0 var(--ss-ink);
+
+  --ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Same tokens exposed to Tailwind utilities: bg-ink, text-mint, etc. */
+@theme {
+  --color-green: #2BCB35;
+  --color-forest: #0F3B2E;
+  --color-teal: #1F5E4F;
+  --color-mint: #66EFA8;
+  --color-yellow: #FFC21A;
+  --color-magenta: #E01E8C;
+  --color-ink: #0B0B0B;
+  --color-cream: #FFF8EE;
+  --color-white: #FFFFFF;
+
+  --font-display: 'Unbounded', system-ui, sans-serif;
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'Space Mono', ui-monospace, monospace;
+
+  --radius-sm: 10px;
+  --radius-md: 18px;
+  --radius-lg: 28px;
+}
+
+/* ------------------------------------------------------------------
+   Base
+   ------------------------------------------------------------------ */
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--ss-ink);
+  color: var(--ss-ink);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+:focus-visible {
+  outline: 3px solid var(--ss-mint);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+@layer components {
+  .label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+  }
+}
+.sr-only-focusable:not(:focus) {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);
+}
+
+/* ------------------------------------------------------------------
+   Physical buttons: hard shadow, press moves 3px down-right
+   ------------------------------------------------------------------ */
+/* Only transform is transitioned; the shadow swaps instantly on press. */
+.press {
+  border: var(--border);
+  box-shadow: var(--shadow-hard);
+  transition: transform 150ms ease;
+}
+.press:hover { transform: translate(-1px, -1px); box-shadow: 6px 6px 0 var(--ss-ink); }
+.press:active { transform: translate(3px, 3px); box-shadow: 2px 2px 0 var(--ss-ink); }
+
+/* ------------------------------------------------------------------
+   Textures
+   ------------------------------------------------------------------ */
+.pinstripes {
+  background-color: var(--ss-ink);
+  background-image: repeating-linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--ss-magenta) 45%, transparent) 0 1px,
+    transparent 1px 24px
+  );
+}
+
+/* ------------------------------------------------------------------
+   Loops
+   ------------------------------------------------------------------ */
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes bob-shadow {
+  0%, 100% { transform: scaleX(1); opacity: 0.45; }
+  50% { transform: scaleX(0.78); opacity: 0.25; }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes marquee-left { to { transform: translateX(-50%); } }
+@keyframes marquee-right { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(14px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+
+.anim-bob { animation: bob 4s ease-in-out infinite; }
+.anim-bob-shadow { animation: bob-shadow 4s ease-in-out infinite; }
+.anim-spin { animation: spin 12s linear infinite; }
+.anim-marquee-left { animation: marquee-left 36s linear infinite; }
+.anim-marquee-right { animation: marquee-right 36s linear infinite; }
+.anim-pop { animation: pop-in 500ms var(--ease-pop) both; }
+
+/* Pause loops while their element is off screen (usePauseOffscreen). */
+[data-offscreen]:is(.anim-bob, .anim-bob-shadow, .anim-spin, .anim-marquee-left, .anim-marquee-right),
+[data-offscreen] :is(.anim-bob, .anim-bob-shadow, .anim-spin, .anim-marquee-left, .anim-marquee-right) {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .anim-bob, .anim-bob-shadow, .anim-spin,
+  .anim-marquee-left, .anim-marquee-right, .anim-pop { animation: none !important; }
+  .press, .press:hover, .press:active { transition: none; }
+}
+
+/* ------------------------------------------------------------------
+   Live call
+   ------------------------------------------------------------------ */
+@keyframes seg-bounce {
+  0% { transform: translateY(0) scale(1); }
+  40% { transform: translateY(-6px) scale(1.06); }
+  100% { transform: none; }
+}
+@keyframes slide-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes drop {
+  from { opacity: 0; transform: translateY(-28px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+.seg-lit { animation: seg-bounce 450ms var(--ease-pop) both; }
+.anim-slide-in { animation: slide-in 400ms var(--ease-pop) both; }
+.anim-drop { animation: drop 400ms var(--ease-pop) both; }
+
+/* Mobile: orb, tabs, then a swipeable row of panels. */
+.call-grid { display: flex; flex-direction: column; }
+.call-swiper {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  margin: 0 -16px;
+  padding: 0 16px 8px;
+  scroll-padding: 0 16px;
+}
+.call-swiper::-webkit-scrollbar { display: none; }
+.call-panel { flex: 0 0 100%; scroll-snap-align: start; min-width: 0; }
+.call-transcript > div { height: min(64vh, 560px); }
+
+/* Desktop: fits 100dvh minus the header. Transcript | orb over order |
+   confusion + ladder. Every column scrolls on its own. */
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: none; }
+}
+@media (min-width: 1024px) {
+  .call-grid {
+    display: grid;
+    flex: 1;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr) 340px minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      'transcript orb confusion'
+      'transcript order confusion';
+    gap: 20px 28px;
+  }
+  .call-swiper { display: contents; }
+  .call-orb { grid-area: orb; }
+  .call-panel { min-height: 0; }
+  .call-transcript { grid-area: transcript; padding: 0 6px 6px 0; }
+  .call-transcript > div { height: 100%; }
+  .call-confusion { grid-area: confusion; overflow-y: auto; padding: 0 6px 6px 0; }
+  .call-order { grid-area: order; overflow-y: auto; overflow-x: hidden; padding: 0 6px 6px 0; }
+  .call-order-card { animation: slide-up 400ms var(--ease-pop) both; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seg-lit, .anim-slide-in, .anim-drop, .call-order-card { animation: none !important; }
+}
+
+/* Route tracker: never wider than its card */
+.route { overflow-x: hidden; }
