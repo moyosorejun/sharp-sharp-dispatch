@@ -198,39 +198,73 @@ const tools = {
     });
   },
 
-  // For callers who don't know their order ID. Needs BOTH the customer's
-  // name and the delivery area to match, so a stranger can't fish for
-  // orders with a name alone. Matching is loose because names and areas
-  // come through speech-to-text.
+  // For callers who don't know their order ID. Any TWO of name, delivery
+  // area and item must match, so a stranger can't fish for orders with one
+  // fact alone, but one misheard detail (a mangled name, a sub-area like
+  // "Ikoyi" for Victoria Island) doesn't sink the lookup. Matching is loose
+  // because everything comes through speech-to-text.
   async find_order(args) {
-    const words = (s = '') => String(s).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter((w) => w.length >= 3);
-    const nameWords = words(args.customer_name);
-    // common short forms callers use for areas
+    const STOP = new Set(['the', 'and', 'for', 'one', 'two', 'pair', 'pairs', 'set', 'items', 'my', 'na']);
+    const words = (s = '') =>
+      String(s).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter((w) => w.length >= 3 && !STOP.has(w));
+    // "E M E K A" or "E-M-E-K-A" (spelled out) -> "emeka"
+    const joinSpelled = (s = '') =>
+      String(s).replace(/\b(?:[A-Za-z][\s.,-]+){2,}[A-Za-z]\b/g, (m) => m.replace(/[^A-Za-z]/g, ''));
     const AREA_ALIASES = { vi: 'victoria island', ph: 'port harcourt' };
-    const area = String(args.delivery_area ?? '').replace(/\b(vi|ph)\b/gi, (m) => AREA_ALIASES[m.toLowerCase()]);
-    const areaWords = words(area);
-    if (!nameWords.length || !areaWords.length) {
-      return JSON.stringify({ found: false, reason: 'need both the name on the order and the delivery area' });
+    const fixArea = (s = '') => String(s).replace(/\b(vi|ph)\b/gi, (m) => AREA_ALIASES[m.toLowerCase()]);
+
+    const given = {
+      name: words(joinSpelled(args.customer_name)),
+      area: words(fixArea(args.delivery_area)),
+      item: words(args.item),
+    };
+    const provided = Object.keys(given).filter((k) => given[k].length);
+    if (provided.length < 2) {
+      return JSON.stringify({ found: false, reason: 'need two of: name on the order, delivery area, item', next_step: 'Ask for the item or the delivery area, then try again.' });
     }
+
     const { data, error } = await supabase.from('orders').select('id, customer_name, item, delivery_area');
     if (error) throw new Error(error.message);
-    const close = (a, b) => a === b || (a.length >= 4 && b.length >= 4 && (a.startsWith(b.slice(0, 4)) || b.startsWith(a.slice(0, 4))));
+    // close enough: same word, same 4-letter start, or a small spelling slip
+    const close = (a, b) =>
+      a === b ||
+      (a.length >= 4 && b.length >= 4 && (a.startsWith(b.slice(0, 4)) || b.startsWith(a.slice(0, 4)))) ||
+      editDistance(a, b) <= (Math.min(a.length, b.length) >= 6 ? 2 : 1);
     const overlaps = (want, have) => want.some((w) => have.some((h) => close(w, h)));
-    const matches = (data || []).filter(
-      (o) => overlaps(nameWords, words(o.customer_name)) && overlaps(areaWords, words(o.delivery_area))
-    );
+    const fields = { name: 'customer_name', area: 'delivery_area', item: 'item' };
+
+    const scored = (data || []).map((o) => ({
+      o,
+      matched: provided.filter((k) => overlaps(given[k], words(o[fields[k]]))),
+    }));
+    const matches = scored.filter((s) => s.matched.length >= 2);
     if (matches.length === 1) {
-      return JSON.stringify({ found: true, order_id: matches[0].id, item: matches[0].item, next_step: 'Confirm the item with the caller, then call check_order with this order_id.' });
+      const { o, matched } = matches[0];
+      return JSON.stringify({
+        found: true,
+        order_id: o.id,
+        order_id_spoken: spokenId(o.id),
+        item: o.item,
+        matched_on: matched,
+        next_step: matched.includes('item')
+          ? 'Call check_order with this order_id now.'
+          : 'Confirm the item with the caller, then call check_order with this order_id.',
+      });
     }
     if (matches.length > 1) {
       return JSON.stringify({
         found: false,
         reason: 'more than one order matches',
-        orders: matches.map((o) => ({ order_id: o.id, item: o.item })),
+        orders: matches.map(({ o }) => ({ order_id: o.id, item: o.item })),
         next_step: 'Ask which item they are expecting (do not read the list out), then call check_order with the matching order_id.',
       });
     }
-    return JSON.stringify({ found: false, reason: 'no order matches that name and delivery area' });
+    const missing = ['name', 'area', 'item'].filter((k) => !provided.includes(k));
+    return JSON.stringify({
+      found: false,
+      reason: 'no order matches two of those details',
+      next_step: missing.length ? `Ask for the ${missing[0] === 'area' ? 'delivery area' : missing[0]} and try again.` : 'Offer to connect them to a person (reason order_not_found).',
+    });
   },
 
   async log_turn(args, callId) {

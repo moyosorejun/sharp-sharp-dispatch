@@ -54,14 +54,15 @@ const toolDefinitions = [
     type: 'function',
     function: {
       name: 'find_order',
-      description: 'Find an order for a caller who does not know their order ID, using the name on the order AND the delivery area. Only use after the caller has checked their SMS or receipt and still cannot find the ID.',
+      description:
+        'Find an order for a caller who does not know their order ID. Needs any two of: name on the order, delivery area, item. Pass every detail the caller has already given. Only use after the caller has checked their SMS or receipt and still cannot find the ID.',
       parameters: {
         type: 'object',
         properties: {
           customer_name: { type: 'string', description: 'The name on the order, as the caller said it.' },
-          delivery_area: { type: 'string', description: 'The area the package is going to, e.g. Victoria Island, Surulere, Abuja.' },
+          delivery_area: { type: 'string', description: 'The area the package is going to, as the caller named it, e.g. Victoria Island, Surulere, Abuja.' },
+          item: { type: 'string', description: 'What the caller ordered, e.g. sneakers, laptop bag.' },
         },
-        required: ['customer_name', 'delivery_area'],
       },
     },
     server,
@@ -261,6 +262,13 @@ async function main() {
     startSpeakingPlan: {
       waitSeconds: 0.3,
       transcriptionEndpointingPlan: { onPunctuationSeconds: 0.1, onNoPunctuationSeconds: 0.8, onNumberSeconds: 0.8 },
+      // After Ada asks for a name, area, item or numbers, callers pause
+      // between words or letters; "E em." was cut off mid-spelling.
+      customEndpointingRules: [
+        { type: 'assistant', regex: '(name|area|wetin you order|what you ordered|item|order ID|four numbers|S S D)[^.?!]*\\?', timeoutSeconds: 1.5 },
+        // the caller is reading out single letters or digits
+        { type: 'customer', regex: '^\\s*(?:[A-Za-z0-9][\\s.,-]+){2,}[A-Za-z0-9]?[\\s.,]*$', timeoutSeconds: 1.5 },
+      ],
     },
     // A caller's "hmm" or "ehen" should not cut Ada off mid-sentence
     // (5 interruptions in one test call). Two real words still do.
