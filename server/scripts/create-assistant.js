@@ -134,7 +134,7 @@ if (keyterm.length > 100) throw new Error(`Deepgram allows 100 keyterms, got ${k
 
 // ---------------------------------------------------------------
 // Speech-to-text. Pick with TRANSCRIBER in .env: openai | azure | deepgram.
-//   openai:   gpt-4o-transcribe, steered by a prompt to write Pidgin in
+//   openai:   gpt-4o-mini-transcribe (or OPENAI_STT_MODEL), steered by a prompt to write Pidgin in
 //             Pidgin spelling instead of "correcting" it to English.
 //   azure:    Nigerian English (en-NG) accent model. English spelling.
 //   deepgram: nova-3 English with Pidgin keyterms. Hears Pidgin as English.
@@ -152,7 +152,9 @@ if (OPENAI_STT_PROMPT.length > 1024) throw new Error(`gpt-4o-transcribe prompt m
 
 const deepgram = { provider: 'deepgram', model: 'nova-3', language: 'en', keyterm };
 const TRANSCRIBERS = {
-  openai: { provider: 'openai', model: 'gpt-4o-transcribe', language: 'en', prompt: OPENAI_STT_PROMPT },
+  // mini: faster (full gpt-4o-transcribe averaged ~0.94s per turn); same prompt.
+  // Set OPENAI_STT_MODEL=gpt-4o-transcribe to go back to the slower, more accurate one.
+  openai: { provider: 'openai', model: process.env.OPENAI_STT_MODEL || 'gpt-4o-mini-transcribe', language: 'en', prompt: OPENAI_STT_PROMPT },
   azure: { provider: 'azure', language: 'en-NG' },
   deepgram,
 };
