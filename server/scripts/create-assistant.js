@@ -130,6 +130,37 @@ const ORDER_TERMS = Array.from({ length: 20 }, (_, i) => `SSD-${1001 + i}`);
 const keyterm = [...PIDGIN_TERMS, ...BRAND_TERMS, ...ORDER_TERMS];
 if (keyterm.length > 100) throw new Error(`Deepgram allows 100 keyterms, got ${keyterm.length}`);
 
+// ---------------------------------------------------------------
+// Speech-to-text. Pick with TRANSCRIBER in .env: openai | azure | deepgram.
+//   openai:   gpt-4o-transcribe, steered by a prompt to write Pidgin in
+//             Pidgin spelling instead of "correcting" it to English.
+//   azure:    Nigerian English (en-NG) accent model. English spelling.
+//   deepgram: nova-3 English with Pidgin keyterms. Hears Pidgin as English.
+// Deepgram is always the fallback if the chosen provider fails.
+// ---------------------------------------------------------------
+const OPENAI_STT_PROMPT = [
+  'Phone call to Sharp Sharp Dispatch, a parcel delivery company in Lagos, Nigeria.',
+  'Callers speak Nigerian Pidgin, Nigerian English, or a mix of both.',
+  'Write Pidgin exactly as spoken, in standard Pidgin spelling. Never convert it to standard English.',
+  'Pidgin words: abeg, wetin, dey, sabi, wahala, no wahala, comot, abi, oya, una, wey, na, fit, sef, sha, shey, ehn, ehen, no vex, abeg no vex, I no get am, I no understand, wetin you talk, how far, make I, e don, e never, you dey follow, small small, we dey come.',
+  'Order IDs look like SSD-1004 (S S D then four digits).',
+  'Example: "Abeg check my order, na SSD-1004." "At hub? Wetin be that one?" "I still no get am."',
+].join(' ');
+if (OPENAI_STT_PROMPT.length > 1024) throw new Error(`gpt-4o-transcribe prompt max is 1024 chars, got ${OPENAI_STT_PROMPT.length}`);
+
+const deepgram = { provider: 'deepgram', model: 'nova-3', language: 'en', keyterm };
+const TRANSCRIBERS = {
+  openai: { provider: 'openai', model: 'gpt-4o-transcribe', language: 'en', prompt: OPENAI_STT_PROMPT },
+  azure: { provider: 'azure', language: 'en-NG' },
+  deepgram,
+};
+const transcriberName = (process.env.TRANSCRIBER || 'openai').trim().toLowerCase();
+if (!TRANSCRIBERS[transcriberName]) throw new Error(`TRANSCRIBER must be one of: ${Object.keys(TRANSCRIBERS).join(', ')}`);
+const transcriber =
+  transcriberName === 'deepgram'
+    ? deepgram
+    : { ...TRANSCRIBERS[transcriberName], fallbackPlan: { transcribers: [deepgram] } };
+
 // Updates the assistant's existing tools (matched by function name) and
 // creates any that are missing. Returns the tool ids in definition order.
 async function syncTools(existingIds) {
@@ -172,6 +203,7 @@ async function main() {
     console.log('No VAPI_ASSISTANT_ID in .env, creating a new assistant...');
   }
 
+  console.log(`Transcriber: ${transcriberName}${transcriberName === 'deepgram' ? '' : ' (Deepgram fallback)'}`);
   console.log('Tools:');
   const toolIds = await syncTools(existingToolIds);
 
@@ -188,7 +220,7 @@ async function main() {
       provider: process.env.VOICE_PROVIDER || '11labs',
       voiceId: process.env.VOICE_ID,
     },
-    transcriber: { provider: 'deepgram', model: 'nova-3', language: 'en', keyterm },
+    transcriber,
     server,
     serverMessages: ['end-of-call-report', 'speech-update'],
     // What reaches the browser. The live call view needs model-output (Ada's

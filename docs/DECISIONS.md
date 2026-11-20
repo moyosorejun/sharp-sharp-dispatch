@@ -23,7 +23,10 @@ This document explains how Ada was built, the choices made along the way, and wh
 |---|---|---|
 | Deepgram keyterms | 54 terms (Pidgin words and phrases, the brand name, all 20 order IDs) passed as `keyterm` to bias recognition | Helps order IDs and the brand. Does not fix Pidgin spelling, because the model has no Pidgin vocabulary to bias toward |
 | Display correction map | `web/src/call/displayFix.ts` rewrites common mis-hearings on screen only ("a beg" to "abeg") | Cheap and instant, but fragile. Only catches patterns someone wrote down, and "what in the world" would become "wetin the world", so it is skipped once the caller is known to speak English |
-| LLM rewrite (current) | Ada already understands the caller. Her `log_turn` tool now writes the caller's exact words in correct Pidgin spelling (`caller_said`), and the transcript shows that version | Works because the LLM has the whole conversation as context. This is what the transcript shows today |
+| LLM rewrite | Ada already understands the caller. Her `log_turn` tool now writes the caller's exact words in correct Pidgin spelling (`caller_said`), and the transcript shows that version | Works because the LLM has the whole conversation as context. Still on, as a second layer |
+| OpenAI `gpt-4o-transcribe` with a prompt (current) | Replaces Deepgram as the transcriber. Its free-text `prompt` tells it callers speak Pidgin and lists the Pidgin spellings to use, so it can write "abeg" and "I no get am" instead of English look-alikes. Deepgram with keyterms stays as the automatic fallback | Being tested. Expected costs: a little more delay before Ada replies and a higher price per minute than Deepgram |
+
+The transcriber is one setting, `TRANSCRIBER` in `server/.env` (`openai`, `azure` or `deepgram`), applied with `npm run create-assistant`, so providers can be compared on the same test phrases.
 
 **What the current approach costs:**
 
@@ -32,7 +35,7 @@ This document explains how Ada was built, the choices made along the way, and wh
 - **A visible switch.** While the caller speaks, the live typing line shows the raw transcript. About a second after they stop, the bubble switches to the corrected version.
 - **It fixes display, not hearing.** If the transcriber mishears badly enough that Ada misunderstands, the correction is wrong too. Better recognition is still the real fix.
 
-**Not tried yet:** Azure Speech with `en-NG` (Nigerian English), which Vapi supports. It will not write Pidgin either, but it may hear Nigerian accents better and give the LLM cleaner text to correct. Longer term, a Nigerian speech provider such as Spitch is on the roadmap.
+**Not tried yet:** Azure Speech with `en-NG` (Nigerian English), available as `TRANSCRIBER=azure`. It will not write Pidgin spelling, but it may hear Nigerian accents better and give the LLM cleaner text to correct. Longer term, a Nigerian speech provider such as Spitch is on the roadmap.
 
 ### 2. Ada's bubbles show what she generated, not what was heard
 
