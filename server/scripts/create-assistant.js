@@ -231,14 +231,32 @@ async function main() {
     // punctuation; spoken order numbers get a little longer so digits said
     // with gaps aren't cut in half.
     startSpeakingPlan: {
-      waitSeconds: 0.3,
-      transcriptionEndpointingPlan: { onPunctuationSeconds: 0.1, onNoPunctuationSeconds: 0.8, onNumberSeconds: 0.8 },
-      // After Ada asks for a name, area, item or numbers, callers pause
-      // between words or letters; "E em." was cut off mid-spelling.
+      waitSeconds: 0.5,
+      // Smart endpointing: a model judges how likely the caller is to still
+      // be mid-sentence (x, 0 to 1) from their words, and Ada waits longer
+      // the more unfinished it sounds:
+      //   finished sentence (x≈0)    -> ~0.3s
+      //   could go either way (0.5)  -> ~1.4s
+      //   clearly mid-sentence (x≈1) -> ~4.8s, room to pause and think
+      // Punctuation-only timing (0.1s after any full stop) cut callers off
+      // whenever they paused, because the transcriber adds a full stop.
+      smartEndpointingPlan: { provider: 'livekit', waitFunction: '300 + 1000 * sqrt(x) + 3500 * x^3' },
+      // used only if smart endpointing is unavailable
+      transcriptionEndpointingPlan: { onPunctuationSeconds: 0.5, onNoPunctuationSeconds: 2, onNumberSeconds: 1 },
       customEndpointingRules: [
-        { type: 'assistant', regex: '(name|area|wetin you order|what you ordered|item|order ID|four numbers|S S D)[^.?!]*\\?', timeoutSeconds: 1.5 },
+        // The caller says they need a moment ("make I remember", "hold on"):
+        // give them time to think instead of jumping in.
+        {
+          type: 'customer',
+          regex: '(make I|let me|lemme) (remember|check|find|look|see|think|confirm)|hold on|wait( o| small| a minute| a sec)?\\b|one moment|give me a (sec|second|minute|moment)|abeg wait|I dey come|I dey check',
+          regexOptions: [{ type: 'ignore-case', enabled: true }],
+          timeoutSeconds: 6,
+        },
+        // After Ada asks for a name, area, item or numbers, callers pause
+        // between words or letters; "E em." was cut off mid-spelling.
+        { type: 'assistant', regex: '(name|area|wetin you order|what you ordered|item|order ID|four numbers|S S D)[^.?!]*\\?', timeoutSeconds: 2 },
         // the caller is reading out single letters or digits
-        { type: 'customer', regex: '^\\s*(?:[A-Za-z0-9][\\s.,-]+){2,}[A-Za-z0-9]?[\\s.,]*$', timeoutSeconds: 1.5 },
+        { type: 'customer', regex: '^\\s*(?:[A-Za-z0-9][\\s.,-]+){2,}[A-Za-z0-9]?[\\s.,]*$', timeoutSeconds: 2 },
       ],
     },
     // A caller's "hmm" or "ehen" should not cut Ada off mid-sentence

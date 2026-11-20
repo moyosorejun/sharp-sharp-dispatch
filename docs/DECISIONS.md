@@ -44,7 +44,7 @@ Vapi's call logs (`GET /call`, `artifact.performanceMetrics`) showed an average 
 | Cause found in the logs | Fix |
 |---|---|
 | Ada called `log_turn` on its own before replying, so every turn needed an extra model round trip, sometimes two (it was called twice in one turn) | The prompt and tool description now say: call it once, in the same response as the spoken reply |
-| Vapi waits 1.5s after any transcript without punctuation before replying | `onNoPunctuationSeconds` lowered to 0.8s; numbers get 0.8s so digits said with gaps are not cut in half |
+| Vapi waits 1.5s after any transcript without punctuation before replying | First lowered to 0.8s (and 0.1s after punctuation). That was too eager: the transcriber adds a full stop at any pause, so callers who paused to think were cut off. Replaced by LiveKit smart endpointing, which waits about 0.3s after a finished sentence and up to about 4.8s when the caller sounds mid-sentence, plus a 6s wait when the caller says they need a moment ("make I remember", "hold on") |
 | Five interruptions in one call: any "hmm" from the caller cut Ada off mid-sentence, leaving fragments like "E be like..." | Interrupting now takes two real words, and Pidgin acknowledgements ("ehen", "yes o", "na so") are ignored |
 | Choppy voice: text was sent to the voice in clause-sized chunks split at commas, each spoken separately | Chunks are now at least 50 characters and split only at sentence ends; ElevenLabs `eleven_turbo_v2_5` with less aggressive streaming optimisation |
 | "SSD-1004" was spoken as "SSD minus..." | A voice formatting rule rewrites order IDs as "S S D, 1 0 0 4" |
