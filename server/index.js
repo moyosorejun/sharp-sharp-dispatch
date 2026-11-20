@@ -125,6 +125,12 @@ function normaliseOrderId(raw = '') {
   return digits ? `SSD-${digits}` : String(raw).trim().toUpperCase();
 }
 
+// "SSD-1004" -> "S S D one zero zero four" (what Ada should say aloud)
+const DIGIT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+function spokenId(id) {
+  return `S S D ${id.replace(/\D/g, '').split('').map((d) => DIGIT_WORDS[d]).join(' ')}`;
+}
+
 // Levenshtein distance for short digit strings
 function editDistance(a, b) {
   const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
@@ -168,7 +174,7 @@ const tools = {
       return JSON.stringify({
         found: false,
         order_id: id,
-        did_you_mean,
+        did_you_mean: did_you_mean.map((oid) => ({ order_id: oid, spoken: spokenId(oid) })),
         next_step: did_you_mean.length
           ? 'Ask the caller to confirm which of these they meant (read each as S S D and single digits), then call check_order with it.'
           : 'Ask the caller to say just the four numbers again, slowly.',
@@ -177,6 +183,7 @@ const tools = {
     return JSON.stringify({
       found: true,
       order_id: data.id,
+      order_id_spoken: spokenId(data.id),
       customer_name: data.customer_name,
       item: data.item,
       from: data.pickup_area,

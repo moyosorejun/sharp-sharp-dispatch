@@ -72,7 +72,7 @@ const toolDefinitions = [
     function: {
       name: 'log_turn',
       description:
-        'Record how confused the caller seems. Call exactly once per caller message, in the same response as your spoken reply (never alone before replying, never twice).',
+        'Record how confused the caller seems. Call exactly once per caller message, before replying. Never skip it and never call it twice for the same message.',
       parameters: {
         type: 'object',
         properties: {
@@ -128,6 +128,7 @@ const PIDGIN_TERMS = [
 const BRAND_TERMS = ['Sharp Sharp Dispatch', 'SSD'];
 // The 20 order ids seeded in supabase/schema.sql
 const ORDER_TERMS = Array.from({ length: 20 }, (_, i) => `SSD-${1001 + i}`);
+const DIGIT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
 const keyterm = [...PIDGIN_TERMS, ...BRAND_TERMS, ...ORDER_TERMS];
 if (keyterm.length > 100) throw new Error(`Deepgram allows 100 keyterms, got ${keyterm.length}`);
 
@@ -234,8 +235,20 @@ async function main() {
         punctuationBoundaries: ['.', '!', '?', ';'],
         formatPlan: {
           enabled: true,
-          // "SSD-1004" was read as "SSD minus one thousand and four"
-          replacements: [{ type: 'regex', regex: '[Ss]\\s?[Ss]\\s?[Dd][\\s-]*(\\d)(\\d)(\\d)(\\d)', value: 'S S D, $1 $2 $3 $4' }],
+          // "SSD-1004" was read as "SSD minus one thousand and four": Vapi's
+          // "dash" formatter turns hyphens into "minus", so it is left out,
+          // and every order ID gets an exact spoken form.
+          formattersEnabled: [
+            'markdown', 'asterisk', 'quote', 'newline', 'colon', 'acronym', 'dollarAmount', 'email',
+            'date', 'time', 'distance', 'unit', 'percentage', 'phoneNumber', 'number', 'stripAsterisk',
+          ],
+          replacements: [
+            ...ORDER_TERMS.flatMap((id) => {
+              const spoken = `S S D, ${id.slice(4).split('').map((d) => DIGIT_WORDS[d]).join(' ')}`;
+              return [id, id.replace('-', ''), id.replace('-', ' ')].map((key) => ({ type: 'exact', key, value: spoken, replaceAllEnabled: true }));
+            }),
+            { type: 'regex', regex: '[Ss]\\s?[Ss]\\s?[Dd][\\s-]*(\\d)(\\d)(\\d)(\\d)', value: 'S S D, $1 $2 $3 $4' },
+          ],
         },
       },
     },
