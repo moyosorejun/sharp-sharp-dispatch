@@ -1,11 +1,13 @@
 // Sharp Sharp Dispatch: backend for the Vapi voice agent.
 // One endpoint (/vapi) receives everything Vapi sends:
-//   - tool-calls          -> check_order, find_order, log_turn, escalate_to_human
+//   - tool-calls          -> check_order, find_order, escalate_to_human (log_turn kept for old assistants)
+//   - conversation-update -> scores each caller turn for confusion (scoring.js, Groq)
 //   - speech-update       -> used to measure how long the caller pauses before speaking
-//   - end-of-call-report  -> saves the transcript and call summary
+//   - end-of-call-report  -> scores the last turn, saves the transcript and call summary
 import 'dotenv/config';
 import express from 'express';
 import { createClient } from '@supabase/supabase-js';
+import { createScorer } from './scoring.js';
 
 const app = express();
 app.use(express.json({ limit: '5mb' }));
@@ -323,6 +325,8 @@ const tools = {
   },
 };
 
+const scoreNewTurns = createScorer({ supabase, ensureCall, takePause });
+
 // ---------------------------------------------------------------
 // End of call: save transcript, main language, max confusion.
 // ---------------------------------------------------------------
@@ -388,7 +392,15 @@ app.post('/vapi', checkSecret, async (req, res) => {
         await trackSpeech(callId, message.role, message.status);
         return res.status(200).json({});
 
+      case 'conversation-update':
+        await scoreNewTurns(callId, message.messagesOpenAIFormatted);
+        return res.status(200).json({});
+
       case 'end-of-call-report':
+        // score the caller's last turn too, even if Ada never replied
+        await scoreNewTurns(callId, message.artifact?.messagesOpenAIFormatted ?? message.messagesOpenAIFormatted, { final: true }).catch((e) =>
+          console.error('final scoring failed:', e.message)
+        );
         await saveCallReport(message);
         return res.status(200).json({});
 

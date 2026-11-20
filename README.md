@@ -19,7 +19,7 @@ Caller (browser or phone)
         |
         |-- check_order(order_id)        -> Express API -> Supabase (orders)
         |-- find_order(name, area)       -> Express API -> Supabase (orders), for callers without an ID
-        |-- log_turn(confusion, level)   -> Express API -> Supabase (turns), plus a correctly spelled caller_said
+        |-- conversation-update          -> Express API -> Groq scores each caller turn -> Supabase (turns)
         |-- escalate_to_human(summary)   -> Express API -> Supabase + n8n -> WhatsApp / email
         |-- speech-update events         -> Express API (measures caller pauses)
         '-- end-of-call-report           -> Express API -> Supabase (calls)
@@ -41,7 +41,7 @@ The web app's live call view shows the transcript (one bubble per turn), Ada's v
 
 ## Stack
 
-Vapi (Deepgram nova-3 speech-to-text, OpenAI LLM, ElevenLabs voice), Node.js + Express, Supabase (Postgres), n8n, React + Vite + Tailwind.
+Vapi (OpenAI gpt-4o-mini-transcribe speech-to-text with Deepgram fallback, OpenAI gpt-4o, ElevenLabs voice), Groq (confusion scoring), Node.js + Express, Supabase (Postgres), n8n, React + Vite + Tailwind.
 
 ## Docs
 

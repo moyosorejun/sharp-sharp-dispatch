@@ -67,37 +67,8 @@ const toolDefinitions = [
     },
     server,
   },
-  {
-    type: 'function',
-    async: true, // runs in the background so the caller never waits for logging
-    function: {
-      name: 'log_turn',
-      description:
-        'Record how confused the caller seems. Call exactly once per caller message, before replying. Never skip it and never call it twice for the same message.',
-      parameters: {
-        type: 'object',
-        properties: {
-          caller_said: {
-            type: 'string',
-            description:
-              "The caller's last message, word for word, in correct spelling. Speech-to-text often mishears Pidgin (e.g. 'a beg' for abeg, 'what in' for wetin, 'they' for dey), so fix misheard words using the conversation for context. Write Pidgin in standard Nigerian Pidgin spelling (abeg, wetin, dey, sabi, wahala, comot, oya, una, wey, na, sef, sha, abi, shey, ehn). Do not translate, summarise or add words. This text is shown in the live transcript.",
-          },
-          language: { type: 'string', enum: ['english', 'pidgin', 'mixed'] },
-          confusion_score: { type: 'integer', minimum: 0, maximum: 3, description: '0 clear, 1 slightly unsure, 2 confused, 3 lost or frustrated' },
-          ladder_level: { type: 'integer', minimum: 0, maximum: 3, description: 'The explanation level you are about to use: 0 normal, 1 smaller steps, 2 analogy, 3 offer a human' },
-          signals: {
-            type: 'array',
-            items: {
-              type: 'string',
-              enum: ['pidgin_confusion_phrase', 'english_confusion_phrase', 'repeated_question', 'wrong_paraphrase', 'short_unsure_reply', 'frustration', 'asked_for_human'],
-            },
-          },
-        },
-        required: ['caller_said', 'language', 'confusion_score', 'ladder_level'],
-      },
-    },
-    server,
-  },
+  // Confusion is no longer logged by Ada through a tool (that cost an extra
+  // model round trip per turn). The server scores turns itself: see server/scoring.js.
   {
     type: 'function',
     function: {
@@ -282,7 +253,7 @@ async function main() {
       ],
     },
     server,
-    serverMessages: ['end-of-call-report', 'speech-update'],
+    serverMessages: ['end-of-call-report', 'speech-update', 'conversation-update'],
     // What reaches the browser. The live call view needs model-output (Ada's
     // generated text by turnId), conversation-update (her greeting), transcript
     // (caller only), tool-calls (order card) and speech-update.

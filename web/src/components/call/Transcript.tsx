@@ -19,8 +19,9 @@ export function Transcript({ lines, turns, className = '' }: { lines: Line[]; tu
 
   // a bubble whose only partial was dropped (noise) has nothing to show
   const shown = lines.filter((l) => l.text || l.partial);
-  // Chips: each caller bubble knows its logged turn (line.turn). If none do
-  // (log_turn calls never reached the browser), fall back to counting.
+  // Chips: the server scores one turn per caller bubble (everything the
+  // caller said between two Ada replies), so turn n pairs with caller
+  // bubble n. The demo engine tags its bubbles with line.turn directly.
   const tagged = shown.some((l) => l.turn !== undefined);
   let callerIndex = -1;
   let lastLang: Line['lang'];
@@ -53,13 +54,16 @@ export function Transcript({ lines, turns, className = '' }: { lines: Line[]; tu
               callerIndex += 1;
               turn = tagged ? (line.turn !== undefined ? turns[line.turn] : undefined) : turns[callerIndex];
             }
-            // Caller text, best first: Ada's correctly spelled version from
-            // log_turn, else the raw transcript with display-only fixes
-            // (skipped once the caller is known to be speaking English).
-            const lang = line.lang ?? lastLang;
-            if (!isAda && line.lang) lastLang = line.lang;
+            // Caller text, best first: the correctly spelled version from the
+            // turn's scoring (server, or log_turn on older assistants), else
+            // the raw transcript with display-only fixes (skipped once the
+            // caller is known to be speaking English).
+            const ownLang = line.lang ?? turn?.language ?? undefined;
+            const lang = ownLang ?? lastLang;
+            if (!isAda && ownLang) lastLang = ownLang;
             const fix = (t: string) => (isAda || lang === 'english' ? t : fixForDisplay(t));
-            const body = !isAda && line.said ? line.said : line.text && fix(line.text);
+            const said = line.said ?? turn?.caller_said ?? undefined;
+            const body = !isAda && said ? said : line.text && fix(line.text);
             const typingOnly = !line.text && !!line.partial;
             return (
               <li key={line.id} className={`flex flex-col ${isAda ? 'items-start' : 'items-end'}`}>

@@ -116,3 +116,7 @@ on conflict (id) do nothing;
 grant usage on schema public to service_role;
 grant select, insert, update, delete on all tables in schema public to service_role;
 grant usage, select on all sequences in schema public to service_role;
+
+-- Confusion scoring runs on the server (server/scoring.js). This counter
+-- lets each turn be claimed exactly once across function instances.
+alter table calls add column if not exists scored_turns integer not null default 0;

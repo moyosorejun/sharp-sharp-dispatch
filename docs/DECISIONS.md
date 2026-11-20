@@ -23,7 +23,7 @@ This document explains how Ada was built, the choices made along the way, and wh
 |---|---|---|
 | Deepgram keyterms | 54 terms (Pidgin words and phrases, the brand name, all 20 order IDs) passed as `keyterm` to bias recognition | Helps order IDs and the brand. Does not fix Pidgin spelling, because the model has no Pidgin vocabulary to bias toward |
 | Display correction map | `web/src/call/displayFix.ts` rewrites common mis-hearings on screen only ("a beg" to "abeg") | Cheap and instant, but fragile. Only catches patterns someone wrote down, and "what in the world" would become "wetin the world", so it is skipped once the caller is known to speak English |
-| LLM rewrite | Ada already understands the caller. Her `log_turn` tool now writes the caller's exact words in correct Pidgin spelling (`caller_said`), and the transcript shows that version | Works because the LLM has the whole conversation as context. Still on, as a second layer |
+| LLM rewrite | An LLM rewrites the caller's exact words in correct Pidgin spelling (`caller_said`), and the transcript shows that version. First done by Ada's `log_turn` tool, now by the server's scorer (trade-off 4) | Works because the LLM has the whole conversation as context. Still on, as a second layer |
 | OpenAI `gpt-4o-mini-transcribe` with a prompt (current) | Replaces Deepgram as the transcriber. Its free-text `prompt` tells it callers speak Pidgin and lists the Pidgin spellings to use, so it can write "abeg" and "I no get am" instead of English look-alikes. Deepgram with keyterms stays as the automatic fallback | Fixed most Pidgin spelling. The full `gpt-4o-transcribe` was tried first but averaged 0.94s per turn (Deepgram: 0.2 to 0.6s), so the faster mini model is used; `OPENAI_STT_MODEL` switches back |
 
 The transcriber is one setting, `TRANSCRIBER` in `server/.env` (`openai`, `azure` or `deepgram`), applied with `npm run create-assistant`, so providers can be compared on the same test phrases.
@@ -66,11 +66,19 @@ Consecutive final transcripts from the same speaker merge into one bubble until 
 
 ### 4. Confusion is scored by the LLM, not a trained model
 
-After every caller message, Ada scores confusion from 0 to 3 and picks an explanation level, using phrases, repeated questions and wrong paraphrases defined in `prompts/system-prompt.md`.
+Ada silently judges confusion from 0 to 3 and picks an explanation level, using phrases, repeated questions and wrong paraphrases defined in `prompts/system-prompt.md`. What gets **recorded** is scored separately, on the server.
 
-- **Why:** no labelled dataset of confused Pidgin callers exists, and an LLM handles code-switching and context well enough for a demo.
+- **Why an LLM:** no labelled dataset of confused Pidgin callers exists, and an LLM handles code-switching and context well enough for a demo.
 - **Cost:** the score is a heuristic. It is not validated, and it can drift between calls.
-- `log_turn` runs asynchronously so the caller never waits for logging. Pause length is measured on the server from speech events and is approximate.
+
+**How it is recorded, and why it moved.** Ada first logged each turn herself with a `log_turn` tool before replying. Call logs showed this cost an extra model round trip every turn, and the model was inconsistent about it: sometimes it spoke a fragment ("No wahala."), stopped for the tool, then carried on, which callers heard as a 3 to 5 second freeze; sometimes it skipped the log entirely, leaving the confusion meter blank. Prompt wording did not fix either.
+
+Now `server/scoring.js` does it. Vapi sends the server a `conversation-update` each time a message is added; once Ada has replied to a caller turn, that turn and her reply go to `openai/gpt-oss-120b` on Groq, which returns the confusion score, signals, language, the caller's words in correct Pidgin spelling, and the ladder level Ada's reply actually used.
+
+- **Gain:** Ada answers without any tool call in the way, and every turn is scored.
+- **Cost:** the meter updates a few seconds after Ada starts replying, not before. It needs a Groq API key on the server. Ada's in-the-moment judgement and the recorded score come from two different models and can occasionally disagree.
+- **Exactly once:** several serverless instances can receive updates at the same time, so each call row has a `scored_turns` counter that a request must advance (an atomic compare-and-set) before scoring a turn.
+- Pause length is measured on the server from speech events and is approximate.
 
 ### 5. Finding an order without the order ID
 
