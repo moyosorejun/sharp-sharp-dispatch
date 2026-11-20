@@ -88,7 +88,7 @@ Full reasoning in [docs/DECISIONS.md](docs/DECISIONS.md).
 - Confusion scoring is a heuristic from the LLM, not a validated model.
 - Finding an order without its ID needs the caller's name and area to be heard correctly. A real deployment would match on the caller's phone number.
 - Pause timing is measured on the server from speech events and is approximate.
-- Deploys to Vercel are manual (`npx vercel deploy --prod` in `server/` and `web/`), not automatic on push.
+- Pushing to `main` redeploys the server and web app on Vercel, but Ada's own settings live on Vapi: run `npm run create-assistant` in `server/` after changing her prompt or config.
 - Tested with a small group of callers.
 
 ## Roadmap

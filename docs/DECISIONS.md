@@ -98,7 +98,7 @@ Both halves run on Vercel: the web app as a static site (`web/vercel.json` sends
 
 - **Cost of serverless:** function instances share no memory, so the pause timing that used to live in a `Map` now lives on the `calls` row (`assistant_stopped_at`, `pending_pause_ms`). That adds two small database writes per turn. If those columns are missing, the server falls back to memory, which is only reliable on a single long-running server.
 - **Grants:** newer Supabase projects do not give API roles access to tables created in the SQL editor, so `schema.sql` ends with explicit grants to `service_role`. The browser never talks to Supabase, so no other role gets access.
-- **Deploys are manual** (`vercel deploy --prod` from `server/` and `web/`), not triggered by pushes to GitHub.
+- **Deploys on push:** both Vercel projects are connected to this repo (Root Directory `server` and `web`), so every push to `main` rebuilds both. Ada's settings on Vapi are separate: after changing the prompt or `create-assistant.js`, run `npm run create-assistant`.
 - Local development still works with ngrok: point `PUBLIC_SERVER_URL` back at the ngrok domain and run `npm run create-assistant`.
 
 ## Known limitations at a glance
